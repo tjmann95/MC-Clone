@@ -1,5 +1,6 @@
 from pyrr import Vector3, Matrix44, vector, vector3
 from math import sin, cos, radians
+import numpy as np
 
 
 class Camera:
@@ -16,7 +17,8 @@ class Camera:
         self.last_camera_y = 0
 
     def get_view_matrix(self):
-        return self.look_at(self.camera_pos, self.camera_pos + self.camera_front, self.camera_up)
+        mat = self.look_at(self.camera_pos, self.camera_pos + self.camera_front, self.camera_up)
+        return np.array(mat, dtype=np.float32)
 
     def process_keyboard(self, direction, velocity):
         if direction == "FORWARD":
