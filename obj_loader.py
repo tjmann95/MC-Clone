@@ -25,6 +25,18 @@ class ObjLoader:
             if values[0] == 'vn':
                 self.norm_coords.append(values[1:4])
 
+            for each_vert in range(0, len(self.vert_coords)):
+                for each_value in range(0, len(self.vert_coords[each_vert])):
+                    self.vert_coords[each_vert][each_value] = float(self.vert_coords[each_vert][each_value])
+
+            for each_tex in range(0, len(self.text_coords)):
+                for each_value in range(0, len(self.text_coords[each_tex])):
+                    self.text_coords[each_tex][each_value] = float(self.text_coords[each_tex][each_value])
+
+            for each_norm in range(0, len(self.norm_coords)):
+                for each_value in range(0, len(self.norm_coords[each_norm])):
+                    self.norm_coords[each_norm][each_value] = float(self.norm_coords[each_norm][each_value])
+
             if values[0] == 'f':
                 face_i = []
                 text_i = []

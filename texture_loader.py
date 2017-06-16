@@ -1,9 +1,8 @@
 from OpenGL.GL import *
 from PIL import Image
-import numpy
 
 
-def load_texture(path):
+def load_texture(path, flip):
     texture = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, texture)
 
@@ -17,6 +16,8 @@ def load_texture(path):
 
     # load image
     image = Image.open(path)
-    img_data = numpy.array(list(image.getdata()), numpy.uint8)
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image.width, image.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
+    if flip:
+        image = image.transpose(Image.FLIP_TOP_BOTTOM)
+    img_data = image.convert("RGBA").tobytes()
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img_data)
     return texture
