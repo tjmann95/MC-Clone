@@ -90,5 +90,6 @@ void main()
     //Directional
     vec4 result = CalcDirLight(dirLight, norm, viewDir);
 
-    outColor = result;
+    //outColor = result;
+    outColor = texture(diffuse, TexCoord);
 }

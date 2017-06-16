@@ -241,11 +241,35 @@ def main():
     skybox_id = load_cubemap(maps)
 
     # Load textures
-    wood = texture_loader.load_texture("resources\\wood_texture.png")
+    wood = texture_loader.load_texture("resources\\wood_texture.png", True)
 
     while not glfw.window_should_close(window):
         glfw.poll_events()
         move()
+
+        cam_x = camera.camera_pos.x
+        cam_y = camera.camera_pos.y
+        cam_z = camera.camera_pos.z
+        view_x = camera.camera_front[0]
+        view_y = camera.camera_front[1]
+        view_z = camera.camera_front[2]
+        cam_front = pyrr.Vector3([camera.camera_front[0], camera.camera_front[1], camera.camera_front[2]])
+        tol = .01
+
+        for x in np.arange(-1.0, 1.0, .001):
+            for y in np.arange(-1.0, 1.0, .001):
+                for z in np.arange(-1.0, 1.0, .001):
+                    if camera.camera_front[0] == 0 or camera.camera_front[1] == 0 or camera.camera_front[2] == 0:
+                        varX = (x - camera.camera_pos.x) / (camera.camera_front[0] + .0001)
+                        varY = (y - camera.camera_pos.y) / (camera.camera_front[1] + .0001)
+                        varZ = (z - camera.camera_pos.z) / (camera.camera_front[2] + .0001)
+                    else:
+                        varX = (x - camera.camera_pos.x) / camera.camera_front[0]
+                        varY = (y - camera.camera_pos.y) / camera.camera_front[1]
+                        varZ = (z - camera.camera_pos.z) / camera.camera_front[2]
+
+                    if (varY - tol <= varX <= varY + tol) and (varX - tol <= varY <= varX + tol) and (varY - tol <= varZ <= varY + tol):
+                        print("In view")
 
         # Render to custom framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, main_fbo)
