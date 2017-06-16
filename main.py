@@ -327,6 +327,7 @@ def main():
             block_in_view = True
         else:
             block_in_view = False
+        print(block_in_view)
 
         # Render to custom framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, main_fbo)
