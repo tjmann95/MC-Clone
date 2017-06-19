@@ -203,10 +203,10 @@ def main():
     # OpenGL initialization
     glViewport(0, 0, window_width, window_height)
     glEnable(GL_DEPTH_TEST)
-    glDepthFunc(GL_LESS)
+    # glDepthFunc(GL_LESS)
     glEnable(GL_STENCIL_TEST)
-    glStencilFunc(GL_NOTEQUAL, 1, 0xFF)
-    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE)
+    # glStencilFunc(GL_NOTEQUAL, 1, 0xFF)
+    # glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE)
     glEnable(GL_CULL_FACE)
     glCullFace(GL_FRONT)
     glFrontFace(GL_CW)
@@ -398,33 +398,33 @@ def main():
         main_shader.set_Matrix44f("view", view_matrix)
 
         # Draw blocks
-        glStencilFunc(GL_ALWAYS, 1, 0xFF)
-        glStencilMask(0xFF)
+        # glStencilFunc(GL_ALWAYS, 1, 0xFF)
+        # glStencilMask(0xFF)
         glBindVertexArray(block_buffer)
         glBindTexture(GL_TEXTURE_2D, wood)
         glDrawArraysInstanced(GL_TRIANGLES, 0, len(block_obj.vertex_index), len(world))
         buffer_loader.unbind_buffers()
         glUseProgram(0)
 
-        # Send view info to outline shader
-        outline_shader.use()
-        outline_shader.set_Matrix44f("view", view_matrix)
-        outline_scale = pyrr.Matrix44.from_scale(pyrr.Vector3([1.5, 1.5, 1.5]))
-        outline_trans = pyrr.Matrix44.from_translation(test_block)
-        outline_model = outline_scale * outline_trans
-        outline_model = np.array(outline_model, dtype=np.float32)
-        outline_shader.set_Matrix44f("model", outline_model)
-
-        # Draw outline
-        glStencilFunc(GL_NOTEQUAL, 1, 0xFF)
-        glStencilMask(0x00)
-        glDisable(GL_DEPTH_TEST)
-        glBindVertexArray(outline_buffer)
-        glDrawArrays(GL_TRIANGLES, 0, 36)
-        glStencilMask(0xFF)
-        glEnable(GL_DEPTH_TEST)
-        buffer_loader.unbind_buffers()
-        glUseProgram(0)
+        # # Send view info to outline shader
+        # outline_shader.use()
+        # outline_shader.set_Matrix44f("view", view_matrix)
+        # outline_scale = pyrr.Matrix44.from_scale(pyrr.Vector3([1.5, 1.5, 1.5]))
+        # outline_trans = pyrr.Matrix44.from_translation(test_block)
+        # outline_model = outline_scale * outline_trans
+        # outline_model = np.array(outline_model, dtype=np.float32)
+        # outline_shader.set_Matrix44f("model", outline_model)
+        #
+        # # Draw outline
+        # glStencilFunc(GL_NOTEQUAL, 1, 0xFF)
+        # glStencilMask(0x00)
+        # glDisable(GL_DEPTH_TEST)
+        # glBindVertexArray(outline_buffer)
+        # glDrawArrays(GL_TRIANGLES, 0, 36)
+        # glStencilMask(0xFF)
+        # glEnable(GL_DEPTH_TEST)
+        # buffer_loader.unbind_buffers()
+        # glUseProgram(0)
 
         # Send view info to skybox shader
         skybox_shader.use()
