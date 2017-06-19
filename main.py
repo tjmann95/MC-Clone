@@ -98,6 +98,15 @@ block_obj.load_model("models\\block.obj")
 block_texture_offset = len(block_obj.vertex_index) * 12
 block_normal_offset = len(block_obj.vertex_index) * 24
 
+translations = []
+for z in range(-5, 0, 1):
+    for y in range(0, 1, 1):
+        for x in range(0, 5, 1):
+            translations.append([2 * x, 2 * y, 2 * z])
+#translations = [8, 8, 8]
+block_positions = np.array([translations], dtype=np.float32).flatten()
+print(block_positions)
+
 
 def framebuffer_size_callback(window, width, height):
     glViewport(0, 0, width, height)
@@ -209,13 +218,23 @@ def main():
     reticule_shader = Shader("shaders\\reticule_vertex.vs", "shaders\\reticule_fragment.fs")
 
     # Object buffers
-    block_buffer = buffer_loader.load_vao("block_vao", block_obj.model)
+    block_buffer = glGenVertexArrays(1)
+    block_vbo = glGenBuffers(1)
+    glBindVertexArray(block_buffer)
+    glBindBuffer(GL_ARRAY_BUFFER, block_vbo)
+    glBufferData(GL_ARRAY_BUFFER, block_obj.model.nbytes, block_obj.model, GL_STATIC_DRAW)
     glEnableVertexAttribArray(0)
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 3, ctypes.c_void_p(0))
     glEnableVertexAttribArray(1)
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 2, ctypes.c_void_p(block_texture_offset))
     glEnableVertexAttribArray(2)
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 3, ctypes.c_void_p(block_normal_offset))
+    instance_buffer = glGenBuffers(1)
+    glBindBuffer(GL_ARRAY_BUFFER, instance_buffer)
+    glBufferData(GL_ARRAY_BUFFER, block_positions.itemsize * len(block_positions), block_positions, GL_STATIC_DRAW)
+    glEnableVertexAttribArray(3)
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 0, ctypes.c_void_p(0))
+    glVertexAttribDivisor(3, 1)
     buffer_loader.unbind_buffers()
 
     # Skybox, screen buffers
@@ -327,7 +346,7 @@ def main():
             block_in_view = True
         else:
             block_in_view = False
-        print(block_in_view)
+        #print(block_in_view)
 
         # Render to custom framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, main_fbo)
@@ -351,7 +370,7 @@ def main():
         # Draw block
         glBindVertexArray(block_buffer)
         glBindTexture(GL_TEXTURE_2D, wood)
-        glDrawArrays(GL_TRIANGLES, 0, len(block_obj.vertex_index))
+        glDrawArraysInstanced(GL_TRIANGLES, 0, len(block_obj.vertex_index), len(block_positions))
         buffer_loader.unbind_buffers()
         glUseProgram(0)
 
