@@ -30,6 +30,7 @@ def isect_line_plane_v3(p0, p1, p_co, p_no, epsilon=1e-6):
 # ----------------------
 # generic math functions
 
+
 def add_v3v3(v0, v1):
     return (
         v0[0] + v1[0],

@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class ObjLoader:
     def __init__(self):
         self.vert_coords = []

@@ -98,6 +98,13 @@ block_obj.load_model("models\\block.obj")
 block_texture_offset = len(block_obj.vertex_index) * 12
 block_normal_offset = len(block_obj.vertex_index) * 24
 
+world = []
+for x in range(0, 10):
+    for z in range(0, 10):
+        world.append(pyrr.Vector3([x * 2, 0, z * 2]))
+block_positions = np.array(world, dtype=np.float32)
+block_positions = np.array([0, 0, 0], dtype=np.float32)
+
 
 def framebuffer_size_callback(window, width, height):
     glViewport(0, 0, width, height)
@@ -195,7 +202,10 @@ def main():
 
     # OpenGL initialization
     glViewport(0, 0, window_width, window_height)
+    glEnable(GL_DEPTH_TEST)
+    glDepthFunc(GL_LESS)
     glEnable(GL_STENCIL_TEST)
+    glStencilFunc(GL_NOTEQUAL, 1, 0xFF)
     glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE)
     glEnable(GL_CULL_FACE)
     glCullFace(GL_FRONT)
@@ -209,13 +219,35 @@ def main():
     reticule_shader = Shader("shaders\\reticule_vertex.vs", "shaders\\reticule_fragment.fs")
 
     # Object buffers
-    block_buffer = buffer_loader.load_vao("block_vao", block_obj.model)
+    block_buffer = glGenVertexArrays(1)
+    block_vbo = glGenBuffers(1)
+    glBindVertexArray(block_buffer)
+    glBindBuffer(GL_ARRAY_BUFFER, block_vbo)
+    glBufferData(GL_ARRAY_BUFFER, block_obj.model.nbytes, block_obj.model, GL_STATIC_DRAW)
     glEnableVertexAttribArray(0)
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 3, ctypes.c_void_p(0))
     glEnableVertexAttribArray(1)
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 2, ctypes.c_void_p(block_texture_offset))
     glEnableVertexAttribArray(2)
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 3, ctypes.c_void_p(block_normal_offset))
+
+    # Instance buffer
+    instance_vbo = glGenBuffers(1)
+    glBindBuffer(GL_ARRAY_BUFFER, instance_vbo)
+    glBufferData(GL_ARRAY_BUFFER, block_positions.nbytes, block_positions, GL_STATIC_DRAW)
+    glEnableVertexAttribArray(3)
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 0, ctypes.c_void_p(0))
+    glVertexAttribDivisor(3, 1)
+    buffer_loader.unbind_buffers()
+
+    # Outline buffer
+    outline_buffer = glGenVertexArrays(1)
+    outline_vbo = glGenBuffers(1)
+    glBindVertexArray(outline_buffer)
+    glBindBuffer(GL_ARRAY_BUFFER, outline_vbo)
+    glBufferData(GL_ARRAY_BUFFER, block_obj.model.nbytes, block_obj.model, GL_STATIC_DRAW)
+    glEnableVertexAttribArray(0)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 3, ctypes.c_void_p(0))
     buffer_loader.unbind_buffers()
 
     # Skybox, screen buffers
@@ -256,6 +288,10 @@ def main():
     skybox_shader.set_int("skybox", 0)
     glUseProgram(0)
 
+    outline_shader.use()
+    outline_shader.set_Matrix44f("projection", projection_matrix)
+    glUseProgram(0)
+
     # Load skybox
     skybox_id = load_cubemap(maps)
 
@@ -275,65 +311,78 @@ def main():
     bottom_pco = block_obj.vert_coords[13]
     bottom_pno = block_obj.norm_coords[0]
 
+    block_in_view = pyrr.Vector3()
+
     while not glfw.window_should_close(window):
         glfw.poll_events()
         move()
 
-        p0 = [camera.camera_pos.x,
-              camera.camera_pos.y,
-              camera.camera_pos.z]
-        p1 = [camera.camera_pos.x + camera.camera_front[0],
-              camera.camera_pos.y + camera.camera_front[1],
-              camera.camera_pos.z + camera.camera_front[2]]
+        test_block = pyrr.Vector3([
+            int(camera.camera_pos.x + 10 * camera.camera_front[0]),
+            int(camera.camera_pos.y + 10 * camera.camera_front[1]),
+            int(camera.camera_pos.z + 10 * camera.camera_front[2])
+        ])
+        print(test_block)
+        # test_block[0] = int(test_block[0])
+        # test_block[1] = int(test_block[1])
+        # test_block[2] = int(test_block[2])
 
-        front_intersect = isect_line_plane_v3(p0, p1, front_pco, front_pno)
-        right_intersect = isect_line_plane_v3(p0, p1, right_pco, right_pno)
-        left_intersect = isect_line_plane_v3(p0, p1, left_pco, left_pno)
-        back_intersect = isect_line_plane_v3(p0, p1, back_pco, back_pno)
-        top_intersect = isect_line_plane_v3(p0, p1, top_pco, top_pno)
-        bottom_intersect = isect_line_plane_v3(p0, p1, bottom_pco, bottom_pno)
-
-        if (-1.0 <= front_intersect[0] <= 1.0) and (-1.0 <= front_intersect[1] <= 1.0):
-            front_in_view = True
-        else:
-            front_in_view = False
-
-        if (-1.0 <= right_intersect[2] <= 1.0) and (-1.0 <= right_intersect[1] <= 1.0):
-            right_in_view = True
-        else:
-            right_in_view = False
-
-        if (-1.0 <= left_intersect[2] <= 1.0) and (-1.0 <= left_intersect[1] <= 1.0):
-            left_in_view = True
-        else:
-            left_in_view = False
-
-        if (-1.0 <= back_intersect[0] <= 1.0) and (-1.0 <= back_intersect[1] <= 1.0):
-            back_in_view = True
-        else:
-            back_in_view = False
-
-        if (-1.0 <= top_intersect[0] <= 1.0) and (-1.0 <= top_intersect[2] <= 1.0):
-            top_in_view = True
-        else:
-            top_in_view = False
-
-        if (-1.0 <= bottom_intersect[0] <= 1.0) and (-1.0 <= bottom_intersect[2] <= 1.0):
-            bottom_in_view = True
-        else:
-            bottom_in_view = False
-
-        if bottom_in_view or top_in_view or back_in_view or left_in_view or right_in_view or front_in_view:
-            block_in_view = True
-        else:
-            block_in_view = False
-        print(block_in_view)
+        # p0 = [camera.camera_pos.x,
+        #       camera.camera_pos.y,
+        #       camera.camera_pos.z]
+        # p1 = [camera.camera_pos.x + camera.camera_front[0],
+        #       camera.camera_pos.y + camera.camera_front[1],
+        #       camera.camera_pos.z + camera.camera_front[2]]
+        #
+        # front_intersect = isect_line_plane_v3(p0, p1, front_pco, front_pno)
+        # right_intersect = isect_line_plane_v3(p0, p1, right_pco, right_pno)
+        # left_intersect = isect_line_plane_v3(p0, p1, left_pco, left_pno)
+        # back_intersect = isect_line_plane_v3(p0, p1, back_pco, back_pno)
+        # top_intersect = isect_line_plane_v3(p0, p1, top_pco, top_pno)
+        # bottom_intersect = isect_line_plane_v3(p0, p1, bottom_pco, bottom_pno)
+        #
+        # print(front_intersect, right_intersect, left_intersect, back_intersect, top_intersect, bottom_intersect)
+        #
+        # if (-1.0 <= front_intersect[0] <= 1.0) and (-1.0 <= front_intersect[1] <= 1.0):
+        #     front_in_view = True
+        # else:
+        #     front_in_view = False
+        #
+        # if (-1.0 <= right_intersect[2] <= 1.0) and (-1.0 <= right_intersect[1] <= 1.0):
+        #     right_in_view = True
+        # else:
+        #     right_in_view = False
+        #
+        # if (-1.0 <= left_intersect[2] <= 1.0) and (-1.0 <= left_intersect[1] <= 1.0):
+        #     left_in_view = True
+        # else:
+        #     left_in_view = False
+        #
+        # if (-1.0 <= back_intersect[0] <= 1.0) and (-1.0 <= back_intersect[1] <= 1.0):
+        #     back_in_view = True
+        # else:
+        #     back_in_view = False
+        #
+        # if (-1.0 <= top_intersect[0] <= 1.0) and (-1.0 <= top_intersect[2] <= 1.0):
+        #     top_in_view = True
+        # else:
+        #     top_in_view = False
+        #
+        # if (-1.0 <= bottom_intersect[0] <= 1.0) and (-1.0 <= bottom_intersect[2] <= 1.0):
+        #     bottom_in_view = True
+        # else:
+        #     bottom_in_view = False
+        #
+        # if bottom_in_view or top_in_view or back_in_view or left_in_view or right_in_view or front_in_view:
+        #     block_in_view = True
+        # else:
+        #     block_in_view = False
+        #print(block_in_view)
 
         # Render to custom framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, main_fbo)
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
-        glEnable(GL_DEPTH_TEST)
 
         # Adjust cam speed from fps
         time = glfw.get_time()
@@ -348,10 +397,32 @@ def main():
         main_shader.set_vec3("viewPos", camera.camera_pos)
         main_shader.set_Matrix44f("view", view_matrix)
 
-        # Draw block
+        # Draw blocks
+        glStencilFunc(GL_ALWAYS, 1, 0xFF)
+        glStencilMask(0xFF)
         glBindVertexArray(block_buffer)
         glBindTexture(GL_TEXTURE_2D, wood)
-        glDrawArrays(GL_TRIANGLES, 0, len(block_obj.vertex_index))
+        glDrawArraysInstanced(GL_TRIANGLES, 0, len(block_obj.vertex_index), len(world))
+        buffer_loader.unbind_buffers()
+        glUseProgram(0)
+
+        # Send view info to outline shader
+        outline_shader.use()
+        outline_shader.set_Matrix44f("view", view_matrix)
+        outline_scale = pyrr.Matrix44.from_scale(pyrr.Vector3([1.5, 1.5, 1.5]))
+        outline_trans = pyrr.Matrix44.from_translation(test_block)
+        outline_model = outline_scale * outline_trans
+        outline_model = np.array(outline_model, dtype=np.float32)
+        outline_shader.set_Matrix44f("model", outline_model)
+
+        # Draw outline
+        glStencilFunc(GL_NOTEQUAL, 1, 0xFF)
+        glStencilMask(0x00)
+        glDisable(GL_DEPTH_TEST)
+        glBindVertexArray(outline_buffer)
+        glDrawArrays(GL_TRIANGLES, 0, 36)
+        glStencilMask(0xFF)
+        glEnable(GL_DEPTH_TEST)
         buffer_loader.unbind_buffers()
         glUseProgram(0)
 
