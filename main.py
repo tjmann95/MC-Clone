@@ -19,6 +19,8 @@ aspect_ratio = window_width / window_height
 last_x, last_y = window_width / 2, window_height / 2
 first_mouse = True
 keys = [False] * 1024
+place = False
+remove = False
 
 maps = [
         "resources\\left.png",
@@ -99,8 +101,8 @@ block_texture_offset = len(block_obj.vertex_index) * 12
 block_normal_offset = len(block_obj.vertex_index) * 24
 
 world = []
-for x in range(0, 10):
-    for z in range(0, 10):
+for x in range(-5, 5):
+    for z in range(-12, 0):
         world.append(pyrr.Vector3([x * 2, 0, z * 2]))
 block_positions = np.array(world, dtype=np.float32)
 
@@ -135,6 +137,13 @@ def move():
         camera.process_keyboard("DOWN", camera_speed * delta_time)
 
 
+def click(position):
+    if place:
+        world.append(position)
+    if remove:
+        world.remove(position)
+
+
 def mouse_callback(window, xpos, ypos):
     global first_mouse, last_x, last_y
     sensitivity = 1.2
@@ -152,6 +161,19 @@ def mouse_callback(window, xpos, ypos):
     y_offset *= sensitivity
 
     camera.process_mouse_movement(x_offset, y_offset)
+
+
+def mouse_button_callback(window, button, action, mods):
+    global place, remove
+    if button == glfw.MOUSE_BUTTON_RIGHT and action == glfw.PRESS:
+        place = True
+    elif button == glfw.MOUSE_BUTTON_LEFT and action == glfw.PRESS:
+        remove = True
+
+    if button == glfw.MOUSE_BUTTON_RIGHT and action == glfw.RELEASE:
+        place = False
+    if button == glfw.MOUSE_BUTTON_LEFT and action == glfw.RELEASE:
+        remove = False
 
 
 def load_cubemap(maps_):
@@ -198,15 +220,16 @@ def main():
     glfw.set_framebuffer_size_callback(window, framebuffer_size_callback)
     glfw.set_key_callback(window, key_callback)
     glfw.set_cursor_pos_callback(window, mouse_callback)
+    glfw.set_mouse_button_callback(window, mouse_button_callback)
 
     # OpenGL initialization
     glViewport(0, 0, window_width, window_height)
-    glEnable(GL_DEPTH_TEST)
     glEnable(GL_STENCIL_TEST)
+    glEnable(GL_DEPTH_TEST)
     glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE)
-    glEnable(GL_CULL_FACE)
-    glCullFace(GL_FRONT)
-    glFrontFace(GL_CW)
+    # glEnable(GL_CULL_FACE)
+    # glCullFace(GL_FRONT)
+    # glFrontFace(GL_CW)
 
     # Load shaders
     main_shader = Shader("shaders\\vertex.vs", "shaders\\fragment.fs")
@@ -245,6 +268,8 @@ def main():
     glBufferData(GL_ARRAY_BUFFER, block_obj.model.nbytes, block_obj.model, GL_STATIC_DRAW)
     glEnableVertexAttribArray(0)
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 3, ctypes.c_void_p(0))
+    glEnableVertexAttribArray(1)
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 3, ctypes.c_void_p(0))
     buffer_loader.unbind_buffers()
 
     # Skybox, screen buffers
@@ -285,9 +310,9 @@ def main():
     skybox_shader.set_int("skybox", 0)
     glUseProgram(0)
 
-    # outline_shader.use()
-    # outline_shader.set_Matrix44f("projection", projection_matrix)
-    # glUseProgram(0)
+    outline_shader.use()
+    outline_shader.set_Matrix44f("projection", projection_matrix)
+    glUseProgram(0)
 
     # Load skybox
     skybox_id = load_cubemap(maps)
@@ -308,15 +333,32 @@ def main():
                 int(camera.camera_pos.z + i * camera.camera_front[2])
             ])
             if each_test_block in world:
-                print(each_test_block)
                 block_in_view = each_test_block
                 break
+            else:
+                block_in_view = False
+
+
+
+        if type(block_in_view) != bool:
+            if camera.camera_pos.x > block_in_view.x:
+                click(pyrr.Vector3([block_in_view.x + 1, block_in_view.y, block_in_view.z]))
+            elif camera.camera_pos.x < block_in_view.x:
+                click(pyrr.Vector3([block_in_view.x - 1, block_in_view.y, block_in_view.z]))
+            elif camera.camera_pos.y > block_in_view.y:
+                click(pyrr.Vector3([block_in_view.x, block_in_view.y + 1, block_in_view.z]))
+            elif camera.camera_pos.y < block_in_view.y:
+                click(pyrr.Vector3([block_in_view.x, block_in_view.y - 1, block_in_view.z]))
+            elif camera.camera_pos.z > block_in_view.z:
+                click(pyrr.Vector3([block_in_view.x, block_in_view.y, block_in_view.z + 1]))
+            elif camera.camera_pos.z < block_in_view.z:
+                click(pyrr.Vector3([block_in_view.x, block_in_view.y, block_in_view.z - 1]))
 
         # Render to custom framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, main_fbo)
 
-        glClearColor(.2, .2, .2, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+        glEnable(GL_DEPTH_TEST)
 
         # Adjust cam speed from fps
         time = glfw.get_time()
@@ -333,30 +375,9 @@ def main():
 
         # Draw blocks
         glStencilMask(0x00)
-        glStencilFunc(GL_ALWAYS, 1, 0xFF)
         glBindVertexArray(block_buffer)
         glBindTexture(GL_TEXTURE_2D, wood)
         glDrawArraysInstanced(GL_TRIANGLES, 0, len(block_obj.vertex_index), len(world))
-        buffer_loader.unbind_buffers()
-        glUseProgram(0)
-
-        # Send view info to outline shader
-        outline_shader.use()
-        outline_shader.set_Matrix44f("view", view_matrix)
-        outline_scale = pyrr.Matrix44.from_scale(pyrr.Vector3([1.3, 1.3, 1.3]))
-        outline_trans = pyrr.Matrix44.from_translation(block_in_view)
-        outline_model = outline_scale * outline_trans
-        outline_model = np.array(outline_model, dtype=np.float32)
-        outline_shader.set_Matrix44f("model", outline_model)
-
-        # Draw outline
-        glStencilFunc(GL_NOTEQUAL, 1, 0xFF)
-        glStencilMask(0x00)
-        glDisable(GL_DEPTH_TEST)
-        glBindVertexArray(outline_buffer)
-        glDrawArrays(GL_TRIANGLES, 0, 36)
-        glStencilMask(0xFF)
-        glEnable(GL_DEPTH_TEST)
         buffer_loader.unbind_buffers()
         glUseProgram(0)
 
@@ -373,6 +394,28 @@ def main():
         buffer_loader.unbind_buffers()
         glUseProgram(0)
         glDepthFunc(GL_LESS)
+
+        # if not type(block_in_view) == bool:
+        #     # Send view info to outline shader
+        #     outline_shader.use()
+        #     outline_shader.set_Matrix44f("view", view_matrix)
+        #     outline_scale = pyrr.Matrix44.from_scale(pyrr.Vector3([.1, .1, .1]))
+        #     outline_trans = pyrr.Matrix44.from_translation(pyrr.Vector3([0, 0, 0]))
+        #     outline_model = outline_scale * outline_trans
+        #     outline_model = np.array(outline_model, dtype=np.float32)
+        #     outline_shader.set_Matrix44f("model", outline_model)
+        #
+        #     # Draw outline
+        #     glStencilFunc(GL_NOTEQUAL, 1, 0x00)
+        #     glStencilMask(0x00)
+        #     glDisable(GL_DEPTH_TEST)
+        #     glBindVertexArray(outline_buffer)
+        #     glDrawArrays(GL_TRIANGLES, 0, 36)
+        #     buffer_loader.unbind_buffers()
+        #     glUseProgram(0)
+
+        glStencilMask(0xFF)
+        glEnable(GL_DEPTH_TEST)
 
         # Unbind custom framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
