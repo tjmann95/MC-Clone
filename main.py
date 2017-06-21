@@ -9,10 +9,8 @@ from camera import Camera
 from shader_loader import Shader
 from PIL import Image
 from obj_loader import ObjLoader
-from in_view_detection import isect_line_plane_v3
 
 camera = Camera()
-camera_speed = 10
 delta_time = 0
 window_width, window_height = 800, 600
 aspect_ratio = window_width / window_height
@@ -94,6 +92,33 @@ reticule_verts = [
     0, 0, 0
 ]
 reticule_verts = np.array([i * .5 for i in reticule_verts], dtype=np.float32)
+outline_verts = [
+    -1.0, 1.0, 1.0,
+    -1.0, 1.0, -1.0,
+    -1.0, 1.0, -1.0,
+    1.0, 1.0, -1.0,
+    1.0, 1.0, -1.0,
+    1.0, 1.0, 1.0,
+    1.0, 1.0, 1.0,
+    -1.0, 1.0, 1.0,
+    -1.0, 1.0, -1.0,
+    -1.0, -1.0, -1.0,
+    1.0, 1.0, -1.0,
+    1.0, -1.0, -1.0,
+    1.0, 1.0, 1.0,
+    1.0, -1.0, 1.0,
+    -1.0, 1.0, 1.0,
+    -1.0, -1.0, 1.0,
+    -1.0, -1.0, -1.0,
+    1.0, -1.0, -1.0,
+    1.0, -1.0, -1.0,
+    1.0, -1.0, 1.0,
+    1.0, -1.0, 1.0,
+    -1.0, -1.0, 1.0,
+    -1.0, -1.0, 1.0,
+    -1.0, -1.0, -1.0
+]
+outline_verts = np.array(outline_verts, dtype=np.float32)
 
 block_obj = ObjLoader()
 block_obj.load_model("models\\block.obj")
@@ -101,8 +126,8 @@ block_texture_offset = len(block_obj.vertex_index) * 12
 block_normal_offset = len(block_obj.vertex_index) * 24
 
 world = []
-for x in range(-5, 5):
-    for z in range(-12, 0):
+for x in range(0, 1):
+    for z in range(0, 1):
         world.append(pyrr.Vector3([x * 2, 0, z * 2]))
 block_positions = np.array(world, dtype=np.float32)
 
@@ -123,6 +148,9 @@ def key_callback(window, key, scancode, action, mode):
 
 
 def move():
+    camera_speed = 10
+    if keys[glfw.KEY_LEFT_CONTROL]:
+        camera_speed *= .25
     if keys[glfw.KEY_W]:
         camera.process_keyboard("FORWARD", camera_speed * delta_time)
     if keys[glfw.KEY_S]:
@@ -200,6 +228,10 @@ def load_cubemap(maps_):
     return tex_id
 
 
+def normalize(position):
+    return pyrr.Vector3([int(round(position[0] / 2.) * 2), int(round(position[1] / 2.) * 2), int(round(position[2] / 2) * 2)])
+
+
 def main():
     global delta_time
 
@@ -261,15 +293,9 @@ def main():
     buffer_loader.unbind_buffers()
 
     # Outline buffer
-    outline_buffer = glGenVertexArrays(1)
-    outline_vbo = glGenBuffers(1)
-    glBindVertexArray(outline_buffer)
-    glBindBuffer(GL_ARRAY_BUFFER, outline_vbo)
-    glBufferData(GL_ARRAY_BUFFER, block_obj.model.nbytes, block_obj.model, GL_STATIC_DRAW)
+    outline_buffer = buffer_loader.load_vao("outline_vao", outline_verts)
     glEnableVertexAttribArray(0)
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 3, ctypes.c_void_p(0))
-    glEnableVertexAttribArray(1)
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, block_obj.model.itemsize * 3, ctypes.c_void_p(0))
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * outline_verts.itemsize, ctypes.c_void_p(0))
     buffer_loader.unbind_buffers()
 
     # Skybox, screen buffers
@@ -321,38 +347,34 @@ def main():
     wood = texture_loader.load_texture("resources\\wood_texture.png", True)
 
     view_dist = 10
+    block_in_view = None
+    render_outline = False
+
+    print(block_obj.norm_coords)
 
     while not glfw.window_should_close(window):
         glfw.poll_events()
         move()
 
+        # Check if block in view and render if it exists
         for i in range(view_dist):
-            each_test_block = pyrr.Vector3([
-                int(camera.camera_pos.x + i * camera.camera_front[0]),
-                int(camera.camera_pos.y + i * camera.camera_front[1]),
-                int(camera.camera_pos.z + i * camera.camera_front[2])
+            test_block = normalize([
+                camera.camera_pos.x + camera.camera_front[0] * i,
+                camera.camera_pos.y + camera.camera_front[1] * i,
+                camera.camera_pos.z + camera.camera_front[2] * i
             ])
-            if each_test_block in world:
-                block_in_view = each_test_block
+            if test_block in world:
+                block_in_view = test_block
+                render_outline = True
                 break
             else:
-                block_in_view = False
+                render_outline = False
+                block_in_view = None
 
-
-
-        if type(block_in_view) != bool:
-            if camera.camera_pos.x > block_in_view.x:
-                click(pyrr.Vector3([block_in_view.x + 1, block_in_view.y, block_in_view.z]))
-            elif camera.camera_pos.x < block_in_view.x:
-                click(pyrr.Vector3([block_in_view.x - 1, block_in_view.y, block_in_view.z]))
-            elif camera.camera_pos.y > block_in_view.y:
-                click(pyrr.Vector3([block_in_view.x, block_in_view.y + 1, block_in_view.z]))
-            elif camera.camera_pos.y < block_in_view.y:
-                click(pyrr.Vector3([block_in_view.x, block_in_view.y - 1, block_in_view.z]))
-            elif camera.camera_pos.z > block_in_view.z:
-                click(pyrr.Vector3([block_in_view.x, block_in_view.y, block_in_view.z + 1]))
-            elif camera.camera_pos.z < block_in_view.z:
-                click(pyrr.Vector3([block_in_view.x, block_in_view.y, block_in_view.z - 1]))
+        # Add block if in view and determine where to add
+        if block_in_view is not None:
+            if camera.camera_pos[1] > block_in_view[1] + 1 and pyrr.vector.dot(block_obj.norm_coords[1], camera.camera_front) < 0:
+                world.append(pyrr.Vector3([block_in_view[0], block_in_view[1] + 1, block_in_view[2]]))
 
         # Render to custom framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, main_fbo)
@@ -381,6 +403,20 @@ def main():
         buffer_loader.unbind_buffers()
         glUseProgram(0)
 
+        outline_shader.use()
+        outline_shader.set_Matrix44f("view", view_matrix)
+        glBindVertexArray(outline_buffer)
+        glLineWidth(2.0)
+        if type(block_in_view) is not None and render_outline:
+            outline_scale = pyrr.Matrix44.from_scale(pyrr.Vector3([1.001, 1.001, 1.001]))
+            outline_trans = pyrr.Matrix44.from_translation(block_in_view)
+            outline_model = outline_scale * outline_trans
+            outline_model = np.array(outline_model, dtype=np.float32)
+            outline_shader.set_Matrix44f("model", outline_model)
+            glDrawArrays(GL_LINES, 0, len(outline_verts))
+        buffer_loader.unbind_buffers()
+        glUseProgram(0)
+
         # Send view info to skybox shader
         skybox_shader.use()
         glDepthFunc(GL_LEQUAL)
@@ -394,25 +430,6 @@ def main():
         buffer_loader.unbind_buffers()
         glUseProgram(0)
         glDepthFunc(GL_LESS)
-
-        # if not type(block_in_view) == bool:
-        #     # Send view info to outline shader
-        #     outline_shader.use()
-        #     outline_shader.set_Matrix44f("view", view_matrix)
-        #     outline_scale = pyrr.Matrix44.from_scale(pyrr.Vector3([.1, .1, .1]))
-        #     outline_trans = pyrr.Matrix44.from_translation(pyrr.Vector3([0, 0, 0]))
-        #     outline_model = outline_scale * outline_trans
-        #     outline_model = np.array(outline_model, dtype=np.float32)
-        #     outline_shader.set_Matrix44f("model", outline_model)
-        #
-        #     # Draw outline
-        #     glStencilFunc(GL_NOTEQUAL, 1, 0x00)
-        #     glStencilMask(0x00)
-        #     glDisable(GL_DEPTH_TEST)
-        #     glBindVertexArray(outline_buffer)
-        #     glDrawArrays(GL_TRIANGLES, 0, 36)
-        #     buffer_loader.unbind_buffers()
-        #     glUseProgram(0)
 
         glStencilMask(0xFF)
         glEnable(GL_DEPTH_TEST)
@@ -431,7 +448,10 @@ def main():
         # Draw reticule
         reticule_shader.use()
         glBindVertexArray(reticule_buffer)
+        glLineWidth(1.0)
         glDrawArrays(GL_LINE_LOOP, 0, 8)
+        buffer_loader.unbind_buffers()
+        glUseProgram(0)
 
         glfw.swap_buffers(window)
 
